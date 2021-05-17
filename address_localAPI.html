@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>카카오(다음) API: 우편번호 + 로컬</title>
+</head>
+<body>
+<!-- 참고1) 우편번호 API: https://postcode.map.daum.net/guide -->
+<!-- 참고2) 로컬 API: https://developers.kakao.com/docs/latest/ko/local/dev-guide -->
+<!-- Kakao 로컬 API는 개발자사이트에서 애플리케이션 등록 후 발급받은 [REST API 키] 사용 -->
+
+<span style="font-size: 20px;">Daum 우편번호 API & Kakao 로컬 API 이용</span><br/><br/>
+<input type="text" id="code" style="width: 150px;" placeholder="우편번호" readonly="readonly">
+<input type="button" onclick="sample3_execDaumPostcode()" value="주소찾기"><br/>
+<input type="text" id="addr" style="width: 375px;" placeholder="주소" readonly="readonly"><br/><br/>
+위도(Y) <input type="text" id="lat" style="width: 121px;" readonly="readonly">&nbsp;
+경도(X) <input type="text" id="lng" style="width: 121px;" readonly="readonly">
+<br/>
+
+<div id="map" style="width:100%;height:800px;margin-top:10px;display:none"></div>
+
+<script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script> <!-- 우편번호 API -->
+<script>
+
+// 선택한 주소의 X, Y 좌표 변수
+var latY = ''; // latitude(위도): Y좌표
+var lngX = ''; // longitude(경도): X좌표
+    
+    
+    // Kakao 로컬API 사용: JSON에서 X, Y 좌표 Key의 값 가져오기 ***** [by 정소윤]
+    function latlng(temp) {
+    	
+    	let json = JSON.parse(temp.response);
+    	
+//    	console.log(json.documents[0].x);
+//   	console.log(json.documents[0].y);
+    	
+    	latY = json.documents[0].y;
+    	lngX = json.documents[0].x;
+    }
+    
+
+    function sample3_execDaumPostcode() {
+       
+        new daum.Postcode({
+            oncomplete: function(data) {
+                // 검색결과 항목을 클릭했을때 실행할 코드를 작성하는 부분.
+
+                // 각 주소의 노출 규칙에 따라 주소를 조합한다.
+                // 내려오는 변수가 값이 없는 경우엔 공백('')값을 가지므로, 이를 참고하여 분기 한다.
+                var code = data.zonecode; // 우편번호
+                var addr = ''; // 기본주소
+                var addrjibun = ''; //지번주소
+                var extraAddr = ''; // 참고항목
+
+                //사용자가 선택한 주소 타입에 따라 해당 주소 값을 가져온다.
+               
+                if (data.userSelectedType === 'R') 
+                { // 사용자가 도로명 주소를 선택했을 경우 - 지번주소 return 되지 않음
+                    addr = data.roadAddress;
+                	
+                 // 사용자가 선택한 주소가 도로명 타입일때 참고항목을 조합한다.
+                 // 법정동명이 있을 경우 추가한다. (법정리는 제외)
+                    // 법정동의 경우 마지막 문자가 "동/로/가"로 끝난다.
+                    if(data.bname !== '' && /[동|로|가]$/g.test(data.bname)){
+                        extraAddr += '(' + data.bname + ') ';
+                    }
+                    // 건물명이 있고, 공동주택일 경우 추가한다.
+                    if(data.buildingName !== '' || data.apartment === 'Y'){
+                        extraAddr += '(' + data.buildingName + ')';
+                    }
+                    
+                }
+                else
+                { // 사용자가 지번 주소를 선택했을 경우(J)
+                	addr = data.jibunAddress;
+                	addrjibun = data.roadAddress;
+                }
+                
+                // 주소 정보를 해당 필드에 넣는다.
+                document.getElementById('code').value = code;
+                document.getElementById('addr').value = addr + ' ' + extraAddr;
+                
+                
+        		// addr을 Kakao 로컬API의 Key로 넣어 x, y 좌표 구하기 ***** [by 정소윤]
+//        		console.log(addr);
+        		let address = 'https://dapi.kakao.com/v2/local/search/address.json?query=' + addr;
+        		let arr = new Array();
+        		arr[0] = {'Authorization': 'KakaoAK 발급받은 REST API APP KEY'}; // POST방식의 header 설정
+		
+        		var client = new XMLHttpRequest(); // 비동기통신, 해당 주소에 따른 XML Key와 값
+
+            	client.open('POST', 'https://dapi.kakao.com/v2/local/search/address.json?query=' + addr);
+            	client.setRequestHeader('Authorization', 'KakaoAK 발급받은 REST API APP KEY');
+            	client.send();
+            	
+            	
+            	// 비동기방식이므로 api로부터 값이 잘 도착하면 x, y를 출력하도록 이벤트 넣기 ***** [by 정소윤]
+            	client.onreadystatechange = function() { // 서버로부터의 응답 확인
+           	        if (client.readyState === client.DONE) { // DONE: 요청한 데이터의 처리가 완료되어 응답할 준비가 완료됨.
+           	            if (client.status === 200 || client.status === 201) { // 200: 성공적으로 처리, 201: 요청 성공+서버에 데이터를 성공적으로 입력 처리
+           	                latlng(client);
+            				
+           	             	// X, Y 좌표값을 해당 필드에 넣는다.
+           	             	document.getElementById('lat').value = latY;
+           	          		document.getElementById('lng').value = lngX;
+                
+           	            } else {
+           	                //console.error(xhr.responseText);
+           	                ;
+           	            }
+           	        }
+            	};
+            	
+            }
+        }).open();
+    }//sample3_execDaumPostcode
+</script>
+
+</body>
+</html>
